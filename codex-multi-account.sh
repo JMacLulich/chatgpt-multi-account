@@ -262,6 +262,21 @@ done
 
 PRIMARY_HOME="$(expand_tilde "$PRIMARY_HOME")"
 
+# Newer ChatGPT builds ship the CLI under Resources/codex-cli/bin; older
+# Codex/ChatGPT builds ship it directly as Resources/codex.
+bundled_cli_for_app() {
+  local app="$1" candidate
+  for candidate in \
+    "$app/Contents/Resources/codex-cli/bin/codex" \
+    "$app/Contents/Resources/codex"
+  do
+    if [ -f "$candidate" ] && [ -x "$candidate" ]; then
+      printf '%s\n' "$candidate"
+      return 0
+    fi
+  done
+}
+
 detect_default_desktop_app() {
   local candidate
 
@@ -273,7 +288,7 @@ detect_default_desktop_app() {
     "/Applications/Codex.app" \
     "$HOME/Applications/Codex.app"
   do
-    if [ -x "$candidate/Contents/Resources/codex" ]; then
+    if [ -n "$(bundled_cli_for_app "$candidate")" ]; then
       printf '%s\n' "$candidate"
       return 0
     fi
@@ -313,7 +328,8 @@ CODEX_APP="$(expand_tilde "$CODEX_APP")"
 REGISTRY_DIR="$(expand_tilde "$REGISTRY_DIR")"
 REGISTRY_FILE="$(expand_tilde "$REGISTRY_FILE")"
 
-CODEX_CLI="$CODEX_APP/Contents/Resources/codex"
+CODEX_CLI="$(bundled_cli_for_app "$CODEX_APP")"
+[ -n "$CODEX_CLI" ] || CODEX_CLI="$CODEX_APP/Contents/Resources/codex-cli/bin/codex"
 CODEX_EXE=""
 
 if [ "$RESET" -ne 1 ]; then
@@ -592,6 +608,7 @@ backup_secondary_home() {
     done < <(
       find "$SECONDARY_HOME" -maxdepth 1 \( \
         -name 'state_*.sqlite' -o -name 'state_*.sqlite-wal' -o -name 'state_*.sqlite-shm' -o \
+        -name 'thread_history_*.sqlite' -o -name 'thread_history_*.sqlite-wal' -o -name 'thread_history_*.sqlite-shm' -o \
         -name 'logs_*.sqlite' -o -name 'logs_*.sqlite-wal' -o -name 'logs_*.sqlite-shm' -o \
         -name 'goals_*.sqlite' -o -name 'goals_*.sqlite-wal' -o -name 'goals_*.sqlite-shm' -o \
         -name 'memories_*.sqlite' -o -name 'memories_*.sqlite-wal' -o -name 'memories_*.sqlite-shm' \
@@ -716,6 +733,11 @@ setup_current_account() {
 
     share_file_if_present ".codex-global-state.json"
     share_db_family "state" "state DB"
+    # Newer builds keep conversation turns/items here; without it shared
+    # threads appear in the sidebar but open empty.
+    if [ -n "$(detect_db_base "thread_history" "thread history DB")" ]; then
+      share_db_family "thread_history" "thread history DB"
+    fi
 
     share_dir "sessions"
     share_dir "archived_sessions"
