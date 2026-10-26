@@ -270,7 +270,7 @@ resolve_bundle_codex_cli() {
     "$app/Contents/Resources/codex-cli/bin/codex" \
     "$app/Contents/Resources/codex"
   do
-    if [ -x "$candidate" ]; then
+    if [ -f "$candidate" ] && [ -x "$candidate" ]; then
       printf '%s\n' "$candidate"
       return 0
     fi
